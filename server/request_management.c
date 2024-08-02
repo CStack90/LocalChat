@@ -68,13 +68,6 @@ void *logout(void* args){
 
     char token[TOKEN_SIZE];//Token got when log in
 
-    /* Token size verification */
-    if(strlen((*parent_info).request.data) != (TOKEN_SIZE-1)){ //Token doesn't have the right format
-        (*parent_info).request.type = -1; 
-        strcpy((*parent_info).request.data,"The token doesn't have the right format");
-        sendto ((*parent_info).sock, (void *) &(*parent_info).request, sizeof(struct request), 0, (struct sockaddr *) &(*parent_info).adr_client, sizeof((*parent_info).adr_client)); 
-    }
-
     printf("[Logout-thread] - Received data (length : %ld): %s\n", strlen(token), token); //Log
     
     /* Sending response */
