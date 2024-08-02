@@ -1,6 +1,6 @@
 # LocalChat
 
-A school project about TCP and UDP communications.
+An easy chat tool for TCP and UDP communications.
 
 # Project architecture
 ### Board

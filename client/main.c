@@ -17,12 +17,12 @@
 #if __APPLE__
     #define OPEN_BOARD "open ./output/board --env MSGID=%i"
 #else
-    #define OPEN_BOARD "export MSGID=%i; gnome-terminal -- \"./output/board\""
+    #define OPEN_BOARD "nohup ./output/board --env MSGID=%i > board_output.log 2>&1 &"
 #endif
 
 int msgid;
 int tcp_socket;
-
+void *TCP_pthread(void *args);
 static void handler(int sig, siginfo_t *info, void *ctx) {
     printf(C_RED "Received signal %s (%d)" C_RESET "\n", get_signal_name(sig), sig);
     // close board and message queue
@@ -58,7 +58,7 @@ void *receive_msg()
         /* If connection ended */
         if(strcmp(message.message, LOGOUT_COMMAND) == 0){
             printf(C_GRN "You are now logged out" C_RESET "\n");
-            //TODO : end connexion to pipe
+            //TODO : end connection to pipe
             break;
         }
 
@@ -91,28 +91,29 @@ void *receive_msg()
 }
 
 /**
-*\brief Creation of TCP socket and interception of each connection to affect a thread to connexion
+*\brief Creation of TCP socket and interception of each connection to affect a thread to connection
 *
 *\param args NULL
 *\return void* Nothing
  */
-void *TCP_connexion(void* args){
-    char message[REQUEST_DATA_MAX_LENGTH]; //Message wrote by user
-    tcp_socket = socket( AF_INET, SOCK_STREAM,0); //Client socket
-    struct sockaddr_in adr_s; //Server address
-    int exit_status = 0; //Exit while condition
-    pthread_t receiver; //Thread that will receive messages
-    char token[TOKEN_SIZE]; //Connexion token
+
+void *TCP_connect(void *args) {
+    char token[TOKEN_SIZE];                       // connection token
+    int exit_status = 0;                          // Exit while condition
+    char message[REQUEST_DATA_MAX_LENGTH];        // Message wrote by user
+    tcp_socket = socket(AF_INET, SOCK_STREAM, 0); // Client socket
+    struct sockaddr_in adr_s;                     // Server address
+    pthread_t receiver; // Thread that will receive messages
     strcpy(token, "");
 
     /* Server address init */
-    bzero(&adr_s,sizeof(adr_s));
+    bzero(&adr_s, sizeof(adr_s));
     adr_s.sin_port = htons(TCP_PORT);
-    adr_s.sin_family= AF_INET;
+    adr_s.sin_family = AF_INET;
     adr_s.sin_addr.s_addr = inet_addr("127.0.0.1");
 
     /* Establish the connection */
-    if ((connect(tcp_socket ,(struct sockaddr *)&adr_s,sizeof(adr_s))) == -1 ) {
+    if ((connect(tcp_socket, (struct sockaddr *)&adr_s, sizeof(adr_s))) == -1) {
         perror("Connection to socket failed");
         kill(0, SIGINT);
         pthread_exit(NULL);
@@ -125,17 +126,20 @@ void *TCP_connexion(void* args){
     /* Sending messages */
     while (exit_status == 0) {
         saisieString(message, REQUEST_DATA_MAX_LENGTH);
-        if (commande_detection(message, &exit_status, &(*token), tcp_socket) == 0){ //There is no command
-            write(tcp_socket, message, strlen(message));
+        if (commande_detection(message, &exit_status, &(*token), tcp_socket) ==
+            0) { // There is no command
+        write(tcp_socket, message, strlen(message));
         }
     }
 
     /* Properly end the client */
     close(tcp_socket);
-    printf("[TCP-connexion] - Connection ended !\n");
-    pthread_exit(NULL);
+    printf("[TCP-connection] - Connection ended !\n");
 }
-
+void *TCP_pthread(void *args) {
+  TCP_connect(args);
+  pthread_exit(NULL);
+}
 static int create_msg_pipe() {
     int msgid = msgget(IPC_PRIVATE, IPC_CREAT|IPC_EXCL|0640);
     if (msgid == -1) {
@@ -165,16 +169,16 @@ int main(int argc, char const *argv[]) {
         return EXIT_FAILURE;
     }
   
-    /* Creation of TCP connexion manager */
+    /* Creation of TCP connection manager */
     printf("Creating TCP thread... ");
-    if (pthread_create( &tcp_connect, NULL, TCP_connexion, NULL)) {
-        perror("\nError during thread creation");
-        kill_board(msgid);
-        msgctl(msgid, IPC_RMID, NULL);
+    if (pthread_create(&tcp_connect, NULL, TCP_pthread, NULL)) {
+      perror("\nError during thread creation");
+      kill_board(msgid);
+      msgctl(msgid, IPC_RMID, NULL);
     } else
-        printf("Created\n");
+      printf("Created\n");
 
-    /* Join TCP connexion manager thread */
+    /* Join TCP connection manager thread */
     pthread_join(tcp_connect, NULL);
 
     kill_board(msgid);
